@@ -13,8 +13,19 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.9" }
-      - run: gradle assembleDebug --stacktrace
+      - name: Build APK
+        run: |
+          set +e
+          gradle assembleDebug --stacktrace > build.log 2>&1
+          code=$?
+          grep -E '^e: ' build.log | head -9 | while IFS= read -r l; do echo "::error::${l:0:450}"; done
+          msg=$(tail -n 45 build.log | cut -c1-300 | sed ':a;N;$!ba;s/\n/%0A/g')
+          if [ "$code" -ne 0 ]; then echo "::error title=Gradle log tail::${msg:0:3500}"; fi
+          exit $code
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: MatrixHome-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            build.log
